@@ -1,10 +1,12 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import matplotlib.pyplot as plt
+from sklearn.metrics import ConfusionMatrixDisplay
 
-# -----------------------------
-# PAGE SETUP
-# -----------------------------
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
 
 st.set_page_config(
     page_title="AI Diabetes Research",
@@ -12,9 +14,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# -----------------------------
+# ============================================================
 # LOAD MODEL
-# -----------------------------
+# ============================================================
 
 @st.cache_resource
 def load_model():
@@ -23,9 +25,9 @@ def load_model():
 
 model = load_model()
 
-# -----------------------------
+# ============================================================
 # TITLE
-# -----------------------------
+# ============================================================
 
 st.title("AI Diabetes Research")
 
@@ -35,36 +37,47 @@ st.subheader(
 )
 
 st.warning(
-    "Research and educational demonstration only. "
+    "Educational research demonstration only. "
     "This application is NOT a medical diagnostic tool "
-    "and should not be used to make healthcare decisions."
+    "and must not be used to make healthcare decisions."
 )
-
-# -----------------------------
-# PROJECT INTRODUCTION
-# -----------------------------
 
 st.markdown(
     """
-This project investigates how machine-learning models can
-classify diabetes outcomes using a historical public dataset.
+This project investigates whether machine-learning algorithms
+can classify diabetes outcomes using health measurements from
+a historical public dataset.
 
-Three machine-learning approaches were investigated:
+Three classification algorithms were investigated:
 
 - Logistic Regression
 - Random Forest
 - Support Vector Machine
 
-The models were evaluated using accuracy, precision, recall,
-F1 score, ROC-AUC and cross-validation.
+The models were evaluated using multiple statistical metrics
+and cross-validation.
+"""
+)
+
+# ============================================================
+# RESEARCH QUESTION
+# ============================================================
+
+st.header("Research Question")
+
+st.markdown(
+    """
+**How effectively can machine-learning classification algorithms
+distinguish diabetes outcomes using the variables contained
+within the selected historical dataset?**
 """
 )
 
 st.divider()
 
-# -----------------------------
-# EXAMPLE INPUTS
-# -----------------------------
+# ============================================================
+# INTERACTIVE MODEL
+# ============================================================
 
 st.header("Interactive Model Demonstration")
 
@@ -135,10 +148,6 @@ with col2:
         value=30
     )
 
-# -----------------------------
-# CREATE INPUT DATA
-# -----------------------------
-
 input_data = pd.DataFrame({
     "Pregnancies": [pregnancies],
     "Glucose": [glucose],
@@ -149,10 +158,6 @@ input_data = pd.DataFrame({
     "DiabetesPedigreeFunction": [diabetes_pedigree],
     "Age": [age]
 })
-
-# -----------------------------
-# RUN MODEL
-# -----------------------------
 
 if st.button("Run Research Model", type="primary"):
 
@@ -182,8 +187,9 @@ if st.button("Run Research Model", type="primary"):
         )
 
     st.caption(
-        "This is a machine-learning output based on the "
-        "historical research dataset. It is not a diagnosis."
+        "This is a model-generated output based on the "
+        "historical research dataset. It is not a diagnosis "
+        "and is not a clinically validated probability."
     )
 
     col1, col2 = st.columns(2)
@@ -191,24 +197,24 @@ if st.button("Run Research Model", type="primary"):
     with col1:
 
         st.metric(
-            "Model output: No diabetes",
+            "Model estimate: No diabetes",
             f"{probability_no:.1%}"
         )
 
     with col2:
 
         st.metric(
-            "Model output: Diabetes",
+            "Model estimate: Diabetes",
             f"{probability_yes:.1%}"
         )
 
-# -----------------------------
-# RESEARCH RESULTS
-# -----------------------------
+# ============================================================
+# MODEL COMPARISON
+# ============================================================
 
 st.divider()
 
-st.header("Model Performance")
+st.header("Model Performance Comparison")
 
 try:
 
@@ -216,20 +222,46 @@ try:
 
     st.dataframe(
         results,
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
 
-except FileNotFoundError:
+    metric_options = [
+        "Accuracy",
+        "Precision",
+        "Recall",
+        "F1 Score"
+    ]
 
-    st.info(
-        "Model comparison results are not currently available."
+    available_metrics = [
+        metric for metric in metric_options
+        if metric in results.columns
+    ]
+
+    if available_metrics:
+
+        selected_metric = st.selectbox(
+            "Select a metric to visualise",
+            available_metrics
+        )
+
+        chart_data = results.set_index("Model")[
+            selected_metric
+        ]
+
+        st.bar_chart(chart_data)
+
+except Exception as e:
+
+    st.error(
+        f"Could not load model comparison results: {e}"
     )
 
-# -----------------------------
+# ============================================================
 # CROSS VALIDATION
-# -----------------------------
+# ============================================================
 
-st.header("Cross-Validation Results")
+st.header("Cross-Validation")
 
 try:
 
@@ -239,20 +271,29 @@ try:
 
     st.dataframe(
         cv_results,
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
 
-except FileNotFoundError:
+    if "AUC" in cv_results.columns:
 
-    st.info(
-        "Cross-validation results are not currently available."
+        auc_chart = cv_results.set_index("Model")["AUC"]
+
+        st.subheader("Cross-Validation ROC-AUC")
+
+        st.bar_chart(auc_chart)
+
+except Exception as e:
+
+    st.error(
+        f"Could not load cross-validation results: {e}"
     )
 
-# -----------------------------
+# ============================================================
 # FEATURE IMPORTANCE
-# -----------------------------
+# ============================================================
 
-st.header("Feature Importance")
+st.header("Random Forest Feature Importance")
 
 try:
 
@@ -260,20 +301,45 @@ try:
         "feature_importance.csv"
     )
 
+    feature_importance = feature_importance.sort_values(
+        "Importance",
+        ascending=True
+    )
+
     st.dataframe(
         feature_importance,
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
 
-except FileNotFoundError:
+    fig, ax = plt.subplots(figsize=(9, 5))
 
-    st.info(
-        "Feature importance results are not currently available."
+    ax.barh(
+        feature_importance["Feature"],
+        feature_importance["Importance"]
     )
 
-# -----------------------------
+    ax.set_xlabel("Importance")
+    ax.set_ylabel("Feature")
+    ax.set_title(
+        "Random Forest Feature Importance"
+    )
+
+    plt.tight_layout()
+
+    st.pyplot(fig)
+
+    plt.close(fig)
+
+except Exception as e:
+
+    st.error(
+        f"Could not load feature importance results: {e}"
+    )
+
+# ============================================================
 # METHODOLOGY
-# -----------------------------
+# ============================================================
 
 st.divider()
 
@@ -281,22 +347,39 @@ st.header("Research Methodology")
 
 st.markdown(
     """
-### Dataset
+### 1. Dataset
 
-The project uses a historical public diabetes dataset
-containing health measurements and an outcome variable.
+The investigation uses a historical public diabetes dataset
+containing eight input variables and a binary outcome variable.
 
-### Machine-learning models
+### 2. Data preparation
 
-The investigation compares:
+The dataset was divided into training and testing data.
+Missing values were handled using median imputation where
+required.
 
-- Logistic Regression
-- Random Forest
-- Support Vector Machine
+### 3. Machine-learning models
 
-### Evaluation
+Three classification algorithms were investigated:
 
-The models are evaluated using:
+**Logistic Regression**
+
+A statistical classification method that models the
+relationship between input variables and a binary outcome.
+
+**Random Forest**
+
+An ensemble method that combines many decision trees to
+produce a classification.
+
+**Support Vector Machine**
+
+A classification algorithm that attempts to separate
+classes using a decision boundary.
+
+### 4. Evaluation
+
+Performance was investigated using:
 
 - Accuracy
 - Precision
@@ -304,41 +387,89 @@ The models are evaluated using:
 - F1 score
 - ROC-AUC
 - Confusion matrices
-- Cross-validation
+- Five-fold stratified cross-validation
 
-Feature importance is also investigated for the Random
-Forest model.
+### 5. Feature importance
+
+Random Forest feature importance was examined to investigate
+which input variables contributed most strongly to the model's
+predictions.
 """
 )
 
-# -----------------------------
+# ============================================================
 # LIMITATIONS
-# -----------------------------
+# ============================================================
 
 st.header("Limitations")
 
 st.markdown(
     """
-This project has important limitations.
+This project has several important limitations.
 
 - The dataset represents a specific historical population.
 - The dataset is relatively small.
+- Results may not generalise to other populations.
 - Model performance on this dataset does not establish
-  clinical validity.
-- Machine-learning models can produce false positives
-  and false negatives.
-- Feature importance does not prove causation.
-- The model has not been clinically validated.
-- The application must not be used for medical decisions.
-- The displayed outputs represent model estimates from
-  this research dataset rather than real-world medical
-  probabilities.
+  clinical effectiveness.
+- Machine-learning models can produce false positives and
+  false negatives.
+- Feature importance does not demonstrate causation.
+- The model has not undergone clinical validation.
+- The displayed model estimates should not be interpreted as
+  real-world medical probabilities.
+- The application is an educational research demonstration
+  rather than a healthcare product.
 """
 )
 
-# -----------------------------
+# ============================================================
+# ETHICS
+# ============================================================
+
+st.header("Ethical Considerations")
+
+st.markdown(
+    """
+Machine-learning systems used in healthcare can have
+significant consequences if their limitations are ignored.
+
+This project therefore does not claim to diagnose disease.
+The application is intended to demonstrate machine-learning
+methods and research evaluation rather than provide medical
+advice.
+
+Users should not enter real personal health information into
+this demonstration.
+"""
+)
+
+# ============================================================
+# CONCLUSION
+# ============================================================
+
+st.header("Research Conclusion")
+
+st.markdown(
+    """
+The investigation compares three machine-learning approaches
+for classifying diabetes outcomes within the selected
+historical dataset.
+
+The results demonstrate how different algorithms can produce
+different performance characteristics and why evaluating a
+model using several metrics is more informative than relying
+on accuracy alone.
+
+The findings are specific to the dataset and experimental
+methodology used in this project and should not be interpreted
+as evidence of clinical effectiveness.
+"""
+)
+
+# ============================================================
 # FOOTER
-# -----------------------------
+# ============================================================
 
 st.divider()
 
